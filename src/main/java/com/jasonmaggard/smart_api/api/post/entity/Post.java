@@ -1,14 +1,22 @@
 package com.jasonmaggard.smart_api.api.post.entity;
 import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
 import java.util.*;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.jasonmaggard.smart_api.api.user.entity.User;
 
 @Entity
 @Table(
   name = "posts",
-  indexes = @Index(name = "idx_users_email", columnList = "email", unique = true)
+  indexes = @Index(name = "idx_posts_user_id", columnList = "user_id")
 )
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
 public class Post {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -22,6 +30,7 @@ public class Post {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
+    @JsonIgnoreProperties({"posts", "hibernateLazyInitializer", "handler"})
     private User user;
     
     @Column(name = "created_at", nullable = false, updatable = false)

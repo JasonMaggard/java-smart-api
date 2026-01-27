@@ -1,0 +1,71 @@
+package com.jasonmaggard.smart_api.api.user.controller;
+
+import com.jasonmaggard.smart_api.api.user.dto.CreateUserDto;
+import com.jasonmaggard.smart_api.api.user.dto.UpdateUserDto;
+import com.jasonmaggard.smart_api.api.user.entity.User;
+import com.jasonmaggard.smart_api.api.user.service.UserService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+import java.util.UUID;
+
+@RestController
+@RequestMapping("/users")
+@RequiredArgsConstructor
+@Tag(name = "users", description = "User management endpoints")
+public class UserController {
+    
+    private final UserService userService;
+    
+    @PostMapping
+    @Operation(summary = "Create a new user")
+    @ApiResponse(responseCode = "201", description = "User created successfully")
+    public ResponseEntity<User> create(@Valid @RequestBody CreateUserDto createUserDto) {
+        User user = userService.create(createUserDto);
+        return ResponseEntity.status(HttpStatus.CREATED).body(user);
+    }
+    
+    @GetMapping
+    @Operation(summary = "Get all users")
+    @ApiResponse(responseCode = "200", description = "List of users retrieved successfully")
+    public ResponseEntity<List<User>> findAll() {
+        List<User> users = userService.findAll();
+        return ResponseEntity.ok(users);
+    }
+    
+    @GetMapping("/{id}")
+    @Operation(summary = "Get a user by ID")
+    @ApiResponse(responseCode = "200", description = "User found")
+    @ApiResponse(responseCode = "404", description = "User not found")
+    public ResponseEntity<User> findOne(@PathVariable UUID id) {
+        User user = userService.findOne(id);
+        return ResponseEntity.ok(user);
+    }
+    
+    @PatchMapping("/{id}")
+    @Operation(summary = "Update a user")
+    @ApiResponse(responseCode = "200", description = "User updated successfully")
+    @ApiResponse(responseCode = "404", description = "User not found")
+    public ResponseEntity<User> update(
+            @PathVariable UUID id,
+            @Valid @RequestBody UpdateUserDto updateUserDto) {
+        User user = userService.update(id, updateUserDto);
+        return ResponseEntity.ok(user);
+    }
+    
+    @DeleteMapping("/{id}")
+    @Operation(summary = "Delete a user")
+    @ApiResponse(responseCode = "204", description = "User deleted successfully")
+    @ApiResponse(responseCode = "404", description = "User not found")
+    public ResponseEntity<Void> remove(@PathVariable UUID id) {
+        userService.remove(id);
+        return ResponseEntity.noContent().build();
+    }
+}

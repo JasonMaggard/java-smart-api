@@ -1,0 +1,29 @@
+package com.jasonmaggard.smart_api.api.post.dto;
+
+import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.util.UUID;
+
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+@Schema(description = "DTO for creating a new post")
+public class CreatePostDto {
+    
+    @Schema(description = "Post title", example = "My First Blog Post")
+    @NotBlank(message = "Title is required")
+    private String title;
+    
+    @Schema(description = "Post content", example = "This is my first blog post content...")
+    @NotBlank(message = "Content is required")
+    private String content;
+    
+    @Schema(description = "ID of the user who created the post", example = "uuid-of-user")
+    @NotNull(message = "User ID is required")
+    private UUID userId;
+}
