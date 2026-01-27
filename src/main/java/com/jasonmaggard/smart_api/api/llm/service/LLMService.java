@@ -23,10 +23,21 @@ import java.util.Map;
 public class LLMService {
     
     private final LLMConfig llmConfig;
+    private final LLMCacheService cacheService;
     private final ObjectMapper objectMapper = new ObjectMapper();
     
     public GeneratedDocumentation generateDocumentation(EndpointMetadata endpoint) {
-        log.info("Generating documentation for {} {}", endpoint.getMethod(), endpoint.getFullPath());
+        String method = endpoint.getMethod();
+        String path = endpoint.getFullPath();
+        
+        // Check cache first
+        GeneratedDocumentation cached = cacheService.get(method, path);
+        if (cached != null) {
+            log.info("Using cached documentation for {} {}", method, path);
+            return cached;
+        }
+        
+        log.info("Generating NEW documentation for {} {}", method, path);
         
         try {
             AnthropicClient client = AnthropicOkHttpClient.builder()
@@ -53,12 +64,15 @@ public class LLMService {
             result.setModel(llmConfig.getModel());
             result.setTokenCount((int) response.usage().outputTokens());
             
-            log.info("Successfully generated documentation for {} {}", endpoint.getMethod(), endpoint.getFullPath());
+            // Cache the result
+            cacheService.put(method, path, result);
+            
+            log.info("Successfully generated and cached documentation for {} {}", method, path);
             return result;
             
         } catch (Exception e) {
             log.error("Failed to generate documentation for {} {}: {}", 
-                endpoint.getMethod(), endpoint.getFullPath(), e.getMessage(), e);
+                method, path, e.getMessage(), e);
             throw new LLMException("Failed to generate documentation: " + e.getMessage(), e);
         }
     }

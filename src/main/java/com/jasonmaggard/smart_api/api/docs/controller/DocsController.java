@@ -6,6 +6,7 @@ import com.jasonmaggard.smart_api.api.docs.service.DocService;
 import com.jasonmaggard.smart_api.api.docs.service.ReflectionService;
 import com.jasonmaggard.smart_api.api.llm.dto.GeneratedDocumentation;
 import com.jasonmaggard.smart_api.api.llm.exception.LLMException;
+import com.jasonmaggard.smart_api.api.llm.service.LLMCacheService;
 import com.jasonmaggard.smart_api.api.llm.service.LLMService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -33,6 +34,7 @@ public class DocsController {
     private final DocService docService;
     private final ReflectionService reflectionService;
     private final LLMService llmService;
+    private final LLMCacheService cacheService;
     
     private static long lastGenerateAt = 0;
     private static final int COOLDOWN_SECONDS = 60;
@@ -177,11 +179,11 @@ public class DocsController {
         return ResponseEntity.ok(docService.findAll());
     }
     
-    @GetMapping("/{path}/{method}")
+    @GetMapping("/by-endpoint")
     @Operation(summary = "Get documentation for a specific endpoint")
     public ResponseEntity<Doc> getEndpointDocs(
-            @PathVariable String path, 
-            @PathVariable String method) {
+            @RequestParam String path, 
+            @RequestParam String method) {
         Doc doc = docService.findByEndpoint(path, method.toUpperCase());
         if (doc == null) {
             return ResponseEntity.notFound().build();
@@ -202,6 +204,37 @@ public class DocsController {
         Map<String, Object> response = new HashMap<>();
         response.put("message", "Refreshed metadata");
         response.put("count", endpoints.size());
+        return ResponseEntity.ok(response);
+    }
+    
+    @GetMapping("/cache/stats")
+    @Operation(summary = "Get cache statistics")
+    public ResponseEntity<Map<String, Object>> getCacheStats() {
+        LLMCacheService.CacheStats stats = cacheService.getStats();
+        Map<String, Object> response = new HashMap<>();
+        response.put("redisAvailable", stats.redisAvailable);
+        response.put("redisCacheSize", stats.redisCacheSize);
+        response.put("memoryCacheSize", stats.memoryCacheSize);
+        return ResponseEntity.ok(response);
+    }
+    
+    @PostMapping("/cache/clear")
+    @Operation(summary = "Clear all cached documentation")
+    public ResponseEntity<Map<String, Object>> clearCache() {
+        cacheService.clearAll();
+        Map<String, Object> response = new HashMap<>();
+        response.put("message", "Cache cleared successfully");
+        return ResponseEntity.ok(response);
+    }
+    
+    @DeleteMapping("/cache/invalidate")
+    @Operation(summary = "Invalidate cache for a specific endpoint")
+    public ResponseEntity<Map<String, Object>> invalidateCache(
+            @RequestParam String path,
+            @RequestParam String method) {
+        cacheService.invalidate(method.toUpperCase(), path);
+        Map<String, Object> response = new HashMap<>();
+        response.put("message", "Cache invalidated for " + method + " " + path);
         return ResponseEntity.ok(response);
     }
     
