@@ -5,6 +5,7 @@ import com.anthropic.client.okhttp.AnthropicOkHttpClient;
 import com.anthropic.models.messages.Message;
 import com.anthropic.models.messages.MessageCreateParams;
 import com.anthropic.models.messages.Model;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jasonmaggard.smart_api.api.docs.dto.EndpointMetadata;
 import com.jasonmaggard.smart_api.api.llm.config.LLMConfig;
@@ -13,6 +14,7 @@ import com.jasonmaggard.smart_api.api.llm.exception.LLMException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import com.fasterxml.jackson.core.type.TypeReference;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -135,20 +137,25 @@ public class LLMService {
             }
             cleanedText = cleanedText.trim();
             
-            // Parse JSON
-            @SuppressWarnings("unchecked")
-            Map<String, Object> jsonMap = objectMapper.readValue(cleanedText, Map.class);
-            
+            JsonNode root = objectMapper.readTree(cleanedText);
             GeneratedDocumentation doc = new GeneratedDocumentation();
-            doc.setDescription((String) jsonMap.get("description"));
-            
-            @SuppressWarnings("unchecked")
-            Map<String, Object> parameters = (Map<String, Object>) jsonMap.get("parameters");
-            doc.setParameters(parameters != null ? parameters : new HashMap<>());
-            
-            @SuppressWarnings("unchecked")
-            Map<String, Object> examples = (Map<String, Object>) jsonMap.get("examples");
-            doc.setExamples(examples != null ? examples : new HashMap<>());
+
+            // description
+            doc.setDescription(root.path("description").asText(null));
+
+            // parameters
+            Map<String, Object> parameters = objectMapper.convertValue(
+                    root.path("parameters"),
+                    new TypeReference<Map<String, Object>>() {}
+                );
+            doc.setParameters(parameters);
+
+            // examples
+            Map<String, Object> examples = objectMapper.convertValue(
+                    root.path("examples"),
+                    new TypeReference<Map<String, Object>>() {}
+                );
+            doc.setExamples(examples);
             
             return doc;
         } catch (Exception e) {

@@ -5,10 +5,12 @@ import com.jasonmaggard.smart_api.api.user.dto.UpdateUserDto;
 import com.jasonmaggard.smart_api.api.user.entity.User;
 import com.jasonmaggard.smart_api.api.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 
 @Service
@@ -36,13 +38,14 @@ public class UserService {
     }
     
     @Transactional(readOnly = true)
-    public User findOne(UUID id) {
+    public User findOne(@NonNull UUID id) {
+        Objects.requireNonNull(id, "User ID cannot be null");
         return userRepository.findById(id)
             .orElseThrow(() -> new IllegalArgumentException("User not found with id: " + id));
     }
     
     @Transactional
-    public User update(UUID id, UpdateUserDto updateUserDto) {
+    public User update(@NonNull UUID id, @NonNull UpdateUserDto updateUserDto) {
         User user = findOne(id);
         
         if (updateUserDto.getName() != null) {
@@ -57,12 +60,15 @@ public class UserService {
             user.setEmail(updateUserDto.getEmail());
         }
         
-        return userRepository.save(user);
+        @SuppressWarnings("null") // JPA save is guaranteed to return non-null for managed entities
+        User savedUser = userRepository.save(user);
+        return Objects.requireNonNull(savedUser, "Failed to save user");
     }
     
     @Transactional
-    public void remove(UUID id) {
+    public void remove(@NonNull UUID id) {
         User user = findOne(id);
+        Objects.requireNonNull(user, "User not found for deletion");
         userRepository.delete(user);
     }
 }

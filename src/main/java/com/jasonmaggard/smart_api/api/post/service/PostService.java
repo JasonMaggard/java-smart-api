@@ -7,10 +7,12 @@ import com.jasonmaggard.smart_api.api.post.repository.PostRepository;
 import com.jasonmaggard.smart_api.api.user.entity.User;
 import com.jasonmaggard.smart_api.api.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 
 @Service
@@ -21,9 +23,10 @@ public class PostService {
     private final UserRepository userRepository;
     
     @Transactional
-    public Post create(CreatePostDto createPostDto) {
-        User user = userRepository.findById(createPostDto.getUserId())
-            .orElseThrow(() -> new IllegalArgumentException("User not found with id: " + createPostDto.getUserId()));
+    public Post create(@NonNull CreatePostDto createPostDto) {
+        UUID userId = Objects.requireNonNull(createPostDto.getUserId(), "User ID cannot be null");
+        User user = userRepository.findById(userId)
+            .orElseThrow(() -> new IllegalArgumentException("User not found with id: " + userId));
         
         Post post = new Post();
         post.setTitle(createPostDto.getTitle());
@@ -39,13 +42,14 @@ public class PostService {
     }
     
     @Transactional(readOnly = true)
-    public Post findOne(UUID id) {
+    public Post findOne(@NonNull UUID id) {
+        Objects.requireNonNull(id, "Post ID cannot be null");
         return postRepository.findById(id)
             .orElseThrow(() -> new IllegalArgumentException("Post not found with id: " + id));
     }
     
     @Transactional
-    public Post update(UUID id, UpdatePostDto updatePostDto) {
+    public Post update(@NonNull UUID id, @NonNull UpdatePostDto updatePostDto) {
         Post post = findOne(id);
         
         if (updatePostDto.getTitle() != null) {
@@ -57,22 +61,27 @@ public class PostService {
         }
         
         if (updatePostDto.getUserId() != null) {
-            User user = userRepository.findById(updatePostDto.getUserId())
-                .orElseThrow(() -> new IllegalArgumentException("User not found with id: " + updatePostDto.getUserId()));
+            UUID userId = Objects.requireNonNull(updatePostDto.getUserId(), "User ID cannot be null");
+            User user = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("User not found with id: " + userId));
             post.setUser(user);
         }
         
-        return postRepository.save(post);
+        @SuppressWarnings("null") // JPA save is guaranteed to return non-null for managed entities
+        Post savedPost = postRepository.save(post);
+        return Objects.requireNonNull(savedPost, "Failed to save post");
     }
     
     @Transactional
-    public void remove(UUID id) {
+    public void remove(@NonNull UUID id) {
         Post post = findOne(id);
+        Objects.requireNonNull(post, "Post not found for deletion");
         postRepository.delete(post);
     }
     
     @Transactional(readOnly = true)
-    public List<Post> findByUserId(UUID userId) {
+    public List<Post> findByUserId(@NonNull UUID userId) {
+        Objects.requireNonNull(userId, "User ID cannot be null");
         if (!userRepository.existsById(userId)) {
             throw new IllegalArgumentException("User not found with id: " + userId);
         }

@@ -1,13 +1,17 @@
 package com.jasonmaggard.smart_api.api.docs.service;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jasonmaggard.smart_api.api.docs.entity.Doc;
 import com.jasonmaggard.smart_api.api.docs.repository.DocRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
 @Service
@@ -15,9 +19,10 @@ import java.util.UUID;
 public class DocService {
     
     private final DocRepository docRepository;
+    private final ObjectMapper objectMapper;
     
     @Transactional
-    public Doc create(Map<String, Object> payload) {
+    public Doc create(JsonNode payload) {
         Doc doc = new Doc();
         updateDocFromPayload(doc, payload);
         return docRepository.save(doc);
@@ -35,39 +40,65 @@ public class DocService {
     }
     
     @Transactional
-    public Doc update(UUID id, Map<String, Object> payload) {
+    public Doc update(UUID id, JsonNode payload) {
+        Objects.requireNonNull(id, "Documentation ID cannot be null");
         Doc doc = docRepository.findById(id)
             .orElseThrow(() -> new IllegalArgumentException("Documentation not found with id: " + id));
         
         updateDocFromPayload(doc, payload);
-        return docRepository.save(doc);
+        @SuppressWarnings("null") // JPA save is guaranteed to return non-null for managed entities
+        Doc savedDoc = docRepository.save(doc);
+        return Objects.requireNonNull(savedDoc, "Failed to save documentation");
     }
     
-    private void updateDocFromPayload(Doc doc, Map<String, Object> payload) {
-        if (payload.containsKey("endpoint_path")) {
-            doc.setEndpointPath((String) payload.get("endpoint_path"));
+    private void updateDocFromPayload(Doc doc, JsonNode payload) {
+        if (payload.has("endpoint_path") && payload.get("endpoint_path").isTextual()) {
+            doc.setEndpointPath(payload.get("endpoint_path").asText());
         }
-        if (payload.containsKey("http_method")) {
-            doc.setHttpMethod(((String) payload.get("http_method")).toUpperCase());
+        
+        if (payload.has("http_method") && payload.get("http_method").isTextual()) {
+            doc.setHttpMethod(payload.get("http_method").asText().toUpperCase());
         }
-        if (payload.containsKey("description")) {
-            doc.setDescription((String) payload.get("description"));
+        
+        if (payload.has("description") && payload.get("description").isTextual()) {
+            doc.setDescription(payload.get("description").asText());
         }
-        if (payload.containsKey("parameters")) {
-            doc.setParameters((Map<String, Object>) payload.get("parameters"));
+        
+        if (payload.has("parameters")) {
+            JsonNode parametersNode = payload.get("parameters");
+            if (parametersNode.isObject() || parametersNode.isNull()) {
+                doc.setParameters(jsonNodeToMap(parametersNode));
+            }
         }
-        if (payload.containsKey("response_schema")) {
-            doc.setResponseSchema((Map<String, Object>) payload.get("response_schema"));
+        
+        if (payload.has("response_schema")) {
+            JsonNode responseSchemaNode = payload.get("response_schema");
+            if (responseSchemaNode.isObject() || responseSchemaNode.isNull()) {
+                doc.setResponseSchema(jsonNodeToMap(responseSchemaNode));
+            }
         }
-        if (payload.containsKey("code_examples")) {
-            doc.setCodeExamples((Map<String, Object>) payload.get("code_examples"));
+        
+        if (payload.has("code_examples")) {
+            JsonNode codeExamplesNode = payload.get("code_examples");
+            if (codeExamplesNode.isObject() || codeExamplesNode.isNull()) {
+                doc.setCodeExamples(jsonNodeToMap(codeExamplesNode));
+            }
         }
-        if (payload.containsKey("llm_model")) {
-            doc.setLlmModel((String) payload.get("llm_model"));
+        
+        if (payload.has("llm_model") && payload.get("llm_model").isTextual()) {
+            doc.setLlmModel(payload.get("llm_model").asText());
         }
-        if (payload.containsKey("token_count")) {
-            Object tokenCount = payload.get("token_count");
-            doc.setTokenCount(tokenCount != null ? ((Number) tokenCount).intValue() : null);
+        
+        if (payload.has("token_count") && payload.get("token_count").isNumber()) {
+            doc.setTokenCount(payload.get("token_count").asInt());
         }
+    }
+    
+    private Map<String, Object> jsonNodeToMap(JsonNode node) {
+        if (node == null || node.isNull()) {
+            return new HashMap<>();
+        }
+        return objectMapper.convertValue(node, objectMapper.getTypeFactory()
+            .constructMapType(HashMap.class, String.class, Object.class));
     }
 }

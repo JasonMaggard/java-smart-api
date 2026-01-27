@@ -11,9 +11,11 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.lang.NonNull;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 
 @RestController
@@ -44,7 +46,8 @@ public class UserController {
     @Operation(summary = "Get a user by ID")
     @ApiResponse(responseCode = "200", description = "User found")
     @ApiResponse(responseCode = "404", description = "User not found")
-    public ResponseEntity<User> findOne(@PathVariable UUID id) {
+    public ResponseEntity<User> findOne(@PathVariable @NonNull UUID id) {
+        Objects.requireNonNull(id, "User ID cannot be null");
         User user = userService.findOne(id);
         return ResponseEntity.ok(user);
     }
@@ -54,8 +57,10 @@ public class UserController {
     @ApiResponse(responseCode = "200", description = "User updated successfully")
     @ApiResponse(responseCode = "404", description = "User not found")
     public ResponseEntity<User> update(
-            @PathVariable UUID id,
-            @Valid @RequestBody UpdateUserDto updateUserDto) {
+            @PathVariable @NonNull UUID id,
+            @Valid @RequestBody @NonNull UpdateUserDto updateUserDto) {
+        Objects.requireNonNull(id, "User ID cannot be null");
+        Objects.requireNonNull(updateUserDto, "UpdateUserDto cannot be null");
         User user = userService.update(id, updateUserDto);
         return ResponseEntity.ok(user);
     }
@@ -64,7 +69,8 @@ public class UserController {
     @Operation(summary = "Delete a user")
     @ApiResponse(responseCode = "204", description = "User deleted successfully")
     @ApiResponse(responseCode = "404", description = "User not found")
-    public ResponseEntity<Void> remove(@PathVariable UUID id) {
+    public ResponseEntity<Void> remove(@PathVariable @NonNull UUID id) {
+        Objects.requireNonNull(id, "User ID cannot be null");
         userService.remove(id);
         return ResponseEntity.noContent().build();
     }

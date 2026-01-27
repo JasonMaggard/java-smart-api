@@ -10,10 +10,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -28,12 +25,17 @@ public class ApiUsageLogService {
      */
     @Transactional
     public void logApiUsage(ApiUsageLog usageLog) {
+        if (usageLog == null) {
+            log.warn("Attempted to log null API usage");
+            return;
+        }
+        
         try {
-            repository.save(usageLog);
+            ApiUsageLog saved = repository.save(usageLog);
             log.debug("Logged API usage: {} {} - {}ms", 
-                usageLog.getHttpMethod(), 
-                usageLog.getEndpointPath(), 
-                usageLog.getResponseTimeMs());
+                saved.getHttpMethod(), 
+                saved.getEndpointPath(), 
+                saved.getResponseTimeMs());
         } catch (Exception e) {
             log.error("Failed to log API usage: {}", e.getMessage());
             // Don't throw exception - logging failure shouldn't break the API

@@ -4,6 +4,7 @@ import com.jasonmaggard.smart_api.api.llm.dto.GeneratedDocumentation;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.RedisConnectionFailureException;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
@@ -20,6 +21,8 @@ public class LLMCacheService {
     private final Map<String, CachedDocument> memoryCache = new ConcurrentHashMap<>();
     
     // Cache TTL: 24 hours
+    @SuppressWarnings("null") // Duration.ofHours is guaranteed non-null
+    @NonNull
     private static final Duration CACHE_TTL = Duration.ofHours(24);
     private static final String CACHE_KEY_PREFIX = "docs:";
     private static final String CACHE_VERSION = "v1";
@@ -44,12 +47,15 @@ public class LLMCacheService {
      */
     public GeneratedDocumentation get(String method, String path) {
         String cacheKey = generateCacheKey(method, path);
+        if (cacheKey == null) {
+            return null;
+        }
         
         // Try Redis first if available
         if (redisAvailable) {
             try {
                 Object cached = redisTemplate.opsForValue().get(cacheKey);
-                if (cached != null) {
+                if (cached instanceof GeneratedDocumentation) {
                     log.debug("Cache HIT (Redis): {} {}", method, path);
                     return (GeneratedDocumentation) cached;
                 }
@@ -80,7 +86,14 @@ public class LLMCacheService {
      * Store documentation in cache
      */
     public void put(String method, String path, GeneratedDocumentation documentation) {
+        if (documentation == null) {
+            return;
+        }
+        
         String cacheKey = generateCacheKey(method, path);
+        if (cacheKey == null) {
+            return;
+        }
         
         // Store in Redis if available
         if (redisAvailable) {
@@ -105,6 +118,9 @@ public class LLMCacheService {
      */
     public void invalidate(String method, String path) {
         String cacheKey = generateCacheKey(method, path);
+        if (cacheKey == null) {
+            return;
+        }
         
         // Remove from Redis if available
         if (redisAvailable) {
@@ -166,9 +182,15 @@ public class LLMCacheService {
     
     private void testRedisConnection() {
         try {
-            redisTemplate.getConnectionFactory().getConnection().ping();
-            log.info("Redis connection successful");
-            redisAvailable = true;
+            var connectionFactory = redisTemplate.getConnectionFactory();
+            if (connectionFactory != null) {
+                connectionFactory.getConnection().ping();
+                log.info("Redis connection successful");
+                redisAvailable = true;
+            } else {
+                log.warn("Redis connection factory is null, will use memory cache only");
+                redisAvailable = false;
+            }
         } catch (Exception e) {
             log.warn("Redis connection failed, will use memory cache only: {}", e.getMessage());
             redisAvailable = false;

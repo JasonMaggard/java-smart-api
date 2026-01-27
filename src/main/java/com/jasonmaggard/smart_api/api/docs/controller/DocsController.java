@@ -1,5 +1,7 @@
 package com.jasonmaggard.smart_api.api.docs.controller;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.jasonmaggard.smart_api.api.docs.dto.EndpointMetadata;
 import com.jasonmaggard.smart_api.api.docs.entity.Doc;
 import com.jasonmaggard.smart_api.api.docs.service.DocService;
@@ -40,6 +42,7 @@ public class DocsController {
     private final LLMCacheService cacheService;
     private final JobScheduler jobScheduler;
     private final DocumentationJobService jobService;
+    private final ObjectMapper objectMapper;
     
     private static long lastGenerateAt = 0;
     private static final int COOLDOWN_SECONDS = 60;
@@ -157,14 +160,14 @@ public class DocsController {
             log.info("Generating documentation for {} {}", method, path);
             GeneratedDocumentation result = llmService.generateDocumentation(metadata);
             
-            // Map result to Doc entity payload
-            Map<String, Object> payload = new HashMap<>();
+            // Map result to Doc entity payload using JsonNode
+            ObjectNode payload = objectMapper.createObjectNode();
             payload.put("endpoint_path", metadata.getFullPath());
             payload.put("http_method", method);
             payload.put("description", result.getDescription());
-            payload.put("parameters", result.getParameters());
-            payload.put("response_schema", null);
-            payload.put("code_examples", result.getExamples());
+            payload.set("parameters", objectMapper.valueToTree(result.getParameters()));
+            payload.putNull("response_schema");
+            payload.set("code_examples", objectMapper.valueToTree(result.getExamples()));
             payload.put("llm_model", result.getModel());
             payload.put("token_count", result.getTokenCount());
             
