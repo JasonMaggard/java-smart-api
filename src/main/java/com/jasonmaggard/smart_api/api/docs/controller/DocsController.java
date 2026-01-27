@@ -8,6 +8,7 @@ import com.jasonmaggard.smart_api.api.llm.dto.GeneratedDocumentation;
 import com.jasonmaggard.smart_api.api.llm.exception.LLMException;
 import com.jasonmaggard.smart_api.api.llm.service.LLMCacheService;
 import com.jasonmaggard.smart_api.api.llm.service.LLMService;
+import com.jasonmaggard.smart_api.api.jobs.service.DocumentationJobService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -16,10 +17,13 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.jobrunr.jobs.JobId;
+import org.jobrunr.scheduling.JobScheduler;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -30,19 +34,20 @@ import java.util.Map;
 @Tag(name = "Documentation", description = "API documentation generation and management")
 @Slf4j
 public class DocsController {
-    
     private final DocService docService;
     private final ReflectionService reflectionService;
     private final LLMService llmService;
     private final LLMCacheService cacheService;
+    private final JobScheduler jobScheduler;
+    private final DocumentationJobService jobService;
     
     private static long lastGenerateAt = 0;
     private static final int COOLDOWN_SECONDS = 60;
     private static final int MAX_ENQUEUE = 50;
     
     @PostMapping("/generate")
-    @Operation(summary = "Trigger documentation generation for all endpoints")
-    @ApiResponse(responseCode = "200", description = "Documentation generation started")
+    @Operation(summary = "Trigger background documentation generation for all endpoints")
+    @ApiResponse(responseCode = "200", description = "Documentation generation jobs enqueued")
     public ResponseEntity<Map<String, Object>> generateDocs(
             @RequestBody(required = false) GenerateDocsRequest request) {
         
@@ -86,16 +91,40 @@ public class DocsController {
             return ResponseEntity.badRequest().body(response);
         }
         
-        // In a real implementation, you would enqueue jobs here
-        // For now, just return the count
-        int enqueued = Math.min(toEnqueue.size(), limit);
+        // Enqueue jobs using JobRunr
+        List<String> jobIds = new ArrayList<>();
+        int enqueued = 0;
+        
+        for (EndpointMetadata endpoint : toEnqueue) {
+            if (enqueued >= limit) {
+                break;
+            }
+            
+            try {
+                JobId jobId = jobScheduler.enqueue(() -> 
+                    jobService.generateDocumentation(
+                        endpoint.getMethod(), 
+                        endpoint.getFullPath(), 
+                        endpoint, 
+                        null
+                    )
+                );
+                jobIds.add(jobId.toString());
+                enqueued++;
+            } catch (Exception e) {
+                log.error("Failed to enqueue job for {} {}: {}", 
+                    endpoint.getMethod(), endpoint.getFullPath(), e.getMessage());
+            }
+        }
+        
         lastGenerateAt = System.currentTimeMillis();
         
-        log.info("Would enqueue {} documentation generation jobs", enqueued);
+        log.info("Enqueued {} documentation generation jobs", enqueued);
         
         Map<String, Object> response = new HashMap<>();
         response.put("message", "Enqueued " + enqueued + " documentation jobs");
         response.put("enqueued", enqueued);
+        response.put("jobIds", jobIds);
         return ResponseEntity.ok(response);
     }
     

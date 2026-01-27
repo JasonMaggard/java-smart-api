@@ -72,6 +72,12 @@
     <version>2.11.1</version>
     <scope>compile</scope>
 </dependency>
+		<!-- JobRunr for background job processing -->
+		<dependency>
+			<groupId>org.jobrunr</groupId>
+			<artifactId>jobrunr-spring-boot-3-starter</artifactId>
+			<version>8.4.0</version>
+		</dependency>
 		<dependency>
 			<groupId>org.projectlombok</groupId>
 			<artifactId>lombok</artifactId>
