@@ -1,6 +1,9 @@
 package com.jasonmaggard.smart_api.api.docs.entity;
 
 import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
@@ -20,6 +23,9 @@ import java.util.UUID;
         columnList = "endpoint_path, http_method"
     )
 )
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
 public class Doc {
     
     @Id
