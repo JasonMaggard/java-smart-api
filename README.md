@@ -42,6 +42,16 @@ Smart API is a production-ready REST API that automatically generates comprehens
 - **Dashboard** - Web UI for monitoring job status (port 8000)
 - **Virtual Threads** - Java 25 Project Loom for efficient concurrency
 
+### 📊 Usage Analytics & Monitoring
+- **Automatic Request Logging** - Transparent interceptor-based tracking of all API calls
+- **Performance Metrics** - Response time tracking per endpoint (avg, min, max)
+- **Status Code Distribution** - Success rate analysis and error patterns
+- **Endpoint Popularity** - Most frequently accessed endpoints ranking
+- **Client Tracking** - IP address logging with proxy support (X-Forwarded-For)
+- **Non-Blocking Design** - Async logging doesn't impact API response times
+- **Error Resilient** - Logging failures never crash the application
+- **Analytics Endpoints** - 6 REST endpoints for querying usage data
+
 ### 🗄️ Core Infrastructure
 - **PostgreSQL 15** - Relational database with JSONB support
 - **Flyway Migrations** - Version-controlled schema management
@@ -50,10 +60,11 @@ Smart API is a production-ready REST API that automatically generates comprehens
 - **Spring Boot 3.5** - Latest framework features
 - **Lombok** - Reduced boilerplate code
 
-### 🔌 REST API Endpoints
+### 🔌 REST API Endpoints (34 Total)
 - **Users** - Full CRUD with validation and error handling
 - **Posts** - CRUD with user relationships and cascade operations
 - **Documentation** - AI generation, retrieval, and cache management
+- **Usage Analytics** - 6 endpoints for monitoring and performance analysis
 - **Health Checks** - Readiness and liveness probes for orchestration
 
 ## 📋 Prerequisites
@@ -149,13 +160,22 @@ The application will start on `http://localhost:8080`. You should see:
 🚀 Application Started Successfully
 📊 Swagger UI: http://localhost:8080/swagger-ui.html
 🔧 JobRunr Dashboard: http://localhost:8000
+📈 Usage Analytics: http://localhost:8080/api/usage/stats
 💚 Health Check: http://localhost:8080/health
 ```
 
-Test the health endpoint:
+Test the endpoints:
 ```bash
+# Basic health check
 curl http://localhost:8080/health
 # Expected: {"status":"healthy","timestamp":"2026-01-27T12:00:00Z"}
+
+# Analytics health
+curl http://localhost:8080/api/usage/health
+# Expected: {"analyticsAvailable":true,"totalRequestsLogged":0,"status":"healthy"}
+
+# Test all analytics endpoints
+./test-analytics.sh
 ```
 
 ## 📖 API Documentation
@@ -219,6 +239,104 @@ curl -X PATCH http://localhost:8080/api/users/550e8400-e29b-41d4-a716-4466554400
 #### Delete User
 ```bash
 curl -X DELETE http://localhost:8080/api/users/550e8400-e29b-41d4-a716-446655440000
+```
+
+### Usage Analytics
+
+#### Get Overall Statistics
+```bash
+curl http://localhost:8080/api/usage/stats
+
+# Response:
+# {
+#   "totalRequests": 1247,
+#   "averageResponseTimeMs": 45.8,
+#   "uniqueEndpoints": 12,
+#   "successfulRequests": 1198,
+#   "failedRequests": 49
+# }
+```
+
+#### Get Top N Most Used Endpoints
+```bash
+curl 'http://localhost:8080/api/usage/top-endpoints?limit=5'
+
+# Response:
+# [
+#   {
+#     "endpointPath": "/api/users",
+#     "httpMethod": "GET",
+#     "requestCount": 523,
+#     "averageResponseTimeMs": 32.5,
+#     "minResponseTimeMs": 12,
+#     "maxResponseTimeMs": 187
+#   },
+#   ...
+# ]
+```
+
+#### Get Slowest Endpoints (Performance Analysis)
+```bash
+curl 'http://localhost:8080/api/usage/slow-endpoints?limit=5'
+
+# Response: Array of endpoints sorted by average response time
+```
+
+#### Get Specific Endpoint Statistics
+```bash
+curl 'http://localhost:8080/api/usage/by-endpoint?path=/api/users&method=GET'
+
+# Response:
+# {
+#   "endpointPath": "/api/users",
+#   "httpMethod": "GET",
+#   "requestCount": 523,
+#   "averageResponseTimeMs": 32.5,
+#   "minResponseTimeMs": 12,
+#   "maxResponseTimeMs": 187
+# }
+```
+
+#### Get Status Code Distribution
+```bash
+curl http://localhost:8080/api/usage/status-codes
+
+# Response:
+# [
+#   {
+#     "statusCode": 200,
+#     "count": 1198,
+#     "percentage": 96.07
+#   },
+#   {
+#     "statusCode": 404,
+#     "count": 35,
+#     "percentage": 2.81
+#   },
+#   {
+#     "statusCode": 500,
+#     "count": 14,
+#     "percentage": 1.12
+#   }
+# ]
+```
+
+#### Analytics Health Check
+```bash
+curl http://localhost:8080/api/usage/health
+
+# Response:
+# {
+#   "analyticsAvailable": true,
+#   "totalRequestsLogged": 1247,
+#   "status": "healthy"
+# }
+```
+
+#### Test All Analytics Endpoints
+```bash
+# Use the provided test script
+./test-analytics.sh
 ```
 
 ### Post Management
@@ -382,54 +500,66 @@ curl http://localhost:8080/health/ready
 ### System Architecture Diagram
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                        Client Layer                          │
-│  (Web Browser, Mobile App, API Consumer, Swagger UI)        │
-└────────────────────┬────────────────────────────────────────┘
-                     │
-                     ▼
-┌─────────────────────────────────────────────────────────────┐
-│                    API Gateway Layer                         │
-│            Spring Boot REST Controllers                      │
-│  ┌──────────────┬──────────────┬─────────────────────────┐  │
-│  │ UserCtrl     │ PostCtrl     │ DocsCtrl  │ HealthCtrl │  │
-│  └──────────────┴──────────────┴─────────────────────────┘  │
-└────────────────────┬────────────────────────────────────────┘
-                     │
-                     ▼
-┌─────────────────────────────────────────────────────────────┐
-│                   Service Layer                              │
-│  ┌──────────────┬──────────────┬──────────────────────────┐ │
-│  │ UserService  │ PostService  │ DocService │ LLMService │ │
-│  │              │              │ ReflectionService        │ │
-│  └──────────────┴──────────────┴──────────────────────────┘ │
-└────────┬───────────────────┬───────────────────────────┬────┘
-         │                   │                           │
-         ▼                   ▼                           ▼
-┌─────────────────┐  ┌──────────────────┐  ┌──────────────────┐
-│   PostgreSQL    │  │   Redis Cache    │  │  JobRunr Queue   │
-│   (Primary DB)  │  │   (L1 Cache)     │  │ (Async Jobs)     │
-│                 │  │                  │  │                  │
-│ • Users         │  │ • Doc Cache      │  │ • Doc Gen Jobs   │
-│ • Posts         │  │ • 24hr TTL       │  │ • Retry Logic    │
-│ • Documentation │  │ • Hit Rate: 95%  │  │ • Rate Limiting  │
-│ • Job State     │  │                  │  │ • 2 Workers      │
-└─────────────────┘  └──────────────────┘  └──────────────────┘
-                              │
-                              ▼
-                     ┌──────────────────┐
-                     │   In-Memory      │
-                     │  Cache (L2)      │
-                     │ (Fallback Only)  │
-                     └──────────────────┘
-                              │
-                              ▼
-                     ┌──────────────────┐
-                     │  Anthropic API   │
-                     │  (Claude Haiku)  │
-                     │  • AI Doc Gen    │
-                     │  • Rate Limited  │
-                     └──────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│                          Client Layer                               │
+│    (Web Browser, Mobile App, API Consumer, Swagger UI)             │
+└───────────────────────────┬─────────────────────────────────────────┘
+                            │
+                            ▼
+         ┌──────────────────────────────────────────┐
+         │    ApiUsageInterceptor (Phase 4)         │
+         │  • Captures all /api/** requests         │
+         │  • Records: path, method, time, IP       │
+         │  • Non-blocking async logging            │
+         └──────────────┬───────────────────────────┘
+                        │
+                        ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                      API Gateway Layer                              │
+│              Spring Boot REST Controllers (34 endpoints)            │
+│  ┌──────────┬──────────┬──────────┬──────────────┬──────────────┐  │
+│  │ UserCtrl │ PostCtrl │ DocsCtrl │ UsageCtrl    │ HealthCtrl   │  │
+│  │          │          │          │ (Phase 4)    │              │  │
+│  └──────────┴──────────┴──────────┴──────────────┴──────────────┘  │
+└───────────────────────┬─────────────────────────────────────────────┘
+                        │
+                        ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                        Service Layer                                │
+│  ┌──────────┬──────────┬──────────────┬──────────────────────────┐ │
+│  │ UserSvc  │ PostSvc  │ DocService   │ ApiUsageLogService       │ │
+│  │          │          │ LLMService   │ (Phase 4 Analytics)      │ │
+│  │          │          │ ReflectionSvc│                          │ │
+│  └──────────┴──────────┴──────────────┴──────────────────────────┘ │
+└────────┬──────────────────┬────────────────────┬────────────────────┘
+         │                  │                    │
+         ▼                  ▼                    ▼
+┌──────────────────┐  ┌──────────────┐  ┌─────────────────────┐
+│   PostgreSQL     │  │ Redis Cache  │  │  JobRunr Queue      │
+│  (Primary DB)    │  │  (L1 Cache)  │  │  (Async Jobs)       │
+│                  │  │              │  │                     │
+│ • Users          │  │ • Doc Cache  │  │ • Doc Gen Jobs      │
+│ • Posts          │  │ • 24hr TTL   │  │ • Retry Logic       │
+│ • Documentation  │  │ • Hit: 95%+  │  │ • Rate Limiting     │
+│ • Job State      │  │              │  │ • 2 Workers         │
+│ • API Usage Logs │  │              │  │                     │
+│   (Phase 4) ✨   │  │              │  │                     │
+└──────────────────┘  └──────┬───────┘  └─────────────────────┘
+                             │
+                             ▼
+                    ┌─────────────────┐
+                    │   In-Memory     │
+                    │   Cache (L2)    │
+                    │ (Fallback Only) │
+                    └────────┬────────┘
+                             │
+                             ▼
+                    ┌─────────────────┐
+                    │  Anthropic API  │
+                    │ (Claude Haiku)  │
+                    │ • AI Doc Gen    │
+                    │ • Rate Limited  │
+                    └─────────────────┘
 ```
 
 ### Project Structure
@@ -450,6 +580,21 @@ src/main/java/com/jasonmaggard/smart_api/
 │   │   └── service/
 │   │       ├── DocService.java           # Business logic
 │   │       └── ReflectionService.java    # Runtime endpoint discovery
+│   ├── usage/                            # ✨ Phase 4: Usage Analytics
+│   │   ├── controller/
+│   │   │   └── UsageController.java      # 6 analytics endpoints
+│   │   ├── dto/
+│   │   │   ├── UsageStatsDto.java        # Overall statistics
+│   │   │   ├── EndpointUsageDto.java     # Per-endpoint metrics
+│   │   │   └── StatusCodeStatsDto.java   # HTTP status distribution
+│   │   ├── entity/
+│   │   │   └── ApiUsageLog.java          # Usage log entity
+│   │   ├── interceptor/
+│   │   │   └── ApiUsageInterceptor.java  # Automatic request logging
+│   │   ├── repository/
+│   │   │   └── ApiUsageLogRepository.java # Custom analytics queries
+│   │   └── service/
+│   │       └── ApiUsageLogService.java   # Analytics business logic
 │   ├── jobs/
 │   │   ├── config/
 │   │   │   └── JobRunrConfig.java        # JobRunr setup (2 workers)
@@ -492,6 +637,8 @@ src/main/java/com/jasonmaggard/smart_api/
 │   │       └── UserService.java
 │   └── health/
 │       └── HealthController.java         # Health check endpoints
+├── config/
+│   └── WebConfig.java                    # Interceptor registration (Phase 4)
 └── SmartApiApplication.java              # Spring Boot entry point
 
 src/main/resources/
@@ -499,10 +646,12 @@ src/main/resources/
 │   ├── V1__Create_users_table.sql
 │   ├── V2__Create_posts_table.sql
 │   ├── V3__Create_documentation_table.sql
-│   └── V4__Create_api_usage_logs_table.sql
+│   └── V4__Create_api_usage_logs_table.sql  # ✨ Phase 4 Analytics
 └── application.properties                 # Spring configuration
 
 src/test/java/                             # Test suite
+scripts/
+└── test-analytics.sh                      # Analytics demo script
 └── com/jasonmaggard/smart_api/
     └── SmartApiApplicationTests.java
 ```
@@ -552,18 +701,20 @@ src/test/java/                             # Test suite
 └─────────────────────────────────┘
 
 ┌─────────────────────────────────┐
-│      API Usage Logs             │
+│      API Usage Logs (Phase 4)   │
 ├─────────────────────────────────┤
 │ id (UUID) PK                    │
 │ endpoint_path (VARCHAR)         │
 │ http_method (VARCHAR)           │
 │ status_code (INTEGER)           │
 │ response_time_ms (INTEGER)      │
-│ timestamp                       │
-│ client_ip (VARCHAR)             │
+│ created_at (TIMESTAMP)          │
+│ ip_address (VARCHAR)            │
 │ user_agent (TEXT)               │
 │                                 │
-│ INDEX(endpoint_path, timestamp) │
+│ INDEX(endpoint_path, created_at)│
+│ INDEX(created_at)               │
+│ INDEX(status_code)              │
 └─────────────────────────────────┘
 ```
 
@@ -576,7 +727,7 @@ Migrations run automatically on startup in order:
 | V1 | `V1__Create_users_table.sql` | User entity with email uniqueness |
 | V2 | `V2__Create_posts_table.sql` | Posts with user FK and timestamps |
 | V3 | `V3__Create_documentation_table.sql` | JSONB storage for AI-generated docs |
-| V4 | `V4__Create_api_usage_logs_table.sql` | Analytics table (Phase 4 ready) |
+| V4 | `V4__Create_api_usage_logs_table.sql` | ✅ **Analytics table (Phase 4 Complete)** |
 
 ### Key Database Features
 
@@ -584,8 +735,9 @@ Migrations run automatically on startup in order:
 - **JSONB Storage** - PostgreSQL-native JSON with indexing support
 - **Automatic Timestamps** - `created_at` and `updated_at` managed by triggers
 - **Foreign Key Constraints** - Referential integrity with cascade deletes
-- **Unique Constraints** - Email uniqueness, (path, method) uniqueness
-- **Indexes** - Optimized for common query patterns
+- **Unique Constraints** - Email uniqueness, (path, method) uniqueness for docs
+- **Performance Indexes** - Optimized for analytics queries (endpoint, timestamp, status)
+- **Usage Analytics** - Automatic request logging with response time tracking
 
 ## 💾 Caching Architecture
 
@@ -984,11 +1136,22 @@ spec:
 - Retry logic with exponential backoff
 - Web dashboard for monitoring
 
-### 📋 Phase 4: Usage Analytics (Next)
-- API request logging
-- Response time tracking
-- Endpoint popularity metrics
-- Usage trends and dashboards
+### ✅ Phase 4: Usage Analytics (Complete)
+- **Automatic Request Logging** - Interceptor-based transparent tracking
+- **Performance Monitoring** - Response time metrics per endpoint
+- **Analytics Endpoints** - 6 REST APIs for querying usage data
+- **Status Code Tracking** - Success/failure rate analysis
+- **Client Identification** - IP tracking with proxy support
+- **Non-Blocking Design** - Async logging for zero performance impact
+- **Error Resilience** - Logging failures never crash API
+- **Smart Filtering** - Excludes static resources, Swagger, JobRunr dashboard
+
+**Implementation Highlights:**
+- `ApiUsageInterceptor` - Captures all `/api/**` requests automatically
+- `ApiUsageLogRepository` - Custom JPA queries for analytics aggregation
+- `ApiUsageLogService` - Business logic with 6 statistical methods
+- `UsageController` - 6 endpoints: stats, top-endpoints, slow-endpoints, by-endpoint, status-codes, health
+- `ApiUsageLog` entity - Stores: path, method, response time, status, IP, timestamp
 
 ### 🔮 Future Enhancements
 - **Authentication/Authorization** - OAuth2, JWT, role-based access

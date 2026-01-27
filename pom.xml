@@ -65,14 +65,12 @@
 			<artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
 			<version>2.7.0</version>
 		</dependency>
-		<!-- Source: https://mvnrepository.com/artifact/com.anthropic/anthropic-java -->
-<dependency>
-    <groupId>com.anthropic</groupId>
-    <artifactId>anthropic-java</artifactId>
-    <version>2.11.1</version>
-    <scope>compile</scope>
-</dependency>
-		<!-- JobRunr for background job processing -->
+		<dependency>
+			<groupId>com.anthropic</groupId>
+			<artifactId>anthropic-java</artifactId>
+			<version>2.11.1</version>
+			<scope>compile</scope>
+		</dependency>
 		<dependency>
 			<groupId>org.jobrunr</groupId>
 			<artifactId>jobrunr-spring-boot-3-starter</artifactId>

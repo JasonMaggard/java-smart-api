@@ -1,10 +1,13 @@
 package com.jasonmaggard.smart_api.api.usage.entity;
 
 import jakarta.persistence.*;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import lombok.AllArgsConstructor;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
-import java.util.Date;
+import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.UUID;
 
@@ -16,6 +19,9 @@ import java.util.UUID;
         @Index(name = "idx_api_usage_logs_endpoint_method", columnList = "endpoint_path, http_method")
     }
 )
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
 public class ApiUsageLog {
     
     @Id
@@ -45,11 +51,10 @@ public class ApiUsageLog {
     private String ipAddress;
     
     @Column(name = "created_at", nullable = false, updatable = false)
-    @Temporal(TemporalType.TIMESTAMP)
-    private Date createdAt;
+    private LocalDateTime createdAt;
     
     @PrePersist
     protected void onCreate() {
-        createdAt = new Date();
+        createdAt = LocalDateTime.now();
     }
 }
