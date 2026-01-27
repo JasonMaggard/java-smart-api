@@ -4,6 +4,9 @@ import com.jasonmaggard.smart_api.api.docs.dto.EndpointMetadata;
 import com.jasonmaggard.smart_api.api.docs.entity.Doc;
 import com.jasonmaggard.smart_api.api.docs.service.DocService;
 import com.jasonmaggard.smart_api.api.docs.service.ReflectionService;
+import com.jasonmaggard.smart_api.api.llm.dto.GeneratedDocumentation;
+import com.jasonmaggard.smart_api.api.llm.exception.LLMException;
+import com.jasonmaggard.smart_api.api.llm.service.LLMService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -29,6 +32,7 @@ public class DocsController {
     
     private final DocService docService;
     private final ReflectionService reflectionService;
+    private final LLMService llmService;
     
     private static long lastGenerateAt = 0;
     private static final int COOLDOWN_SECONDS = 60;
@@ -103,39 +107,67 @@ public class DocsController {
         String path = request.getPath();
         String method = request.getMethod() != null ? request.getMethod().toUpperCase() : "GET";
         
-        // Find endpoint metadata
-        EndpointMetadata metadata = reflectionService.extractEndpointMetadata().stream()
-            .filter(e -> e.getPath().equals(path) && e.getMethod().equals(method))
-            .findFirst()
-            .orElse(null);
-        
-        // In a real implementation, call LLM service to generate documentation
-        // For now, create a placeholder
-        Map<String, Object> payload = new HashMap<>();
-        payload.put("endpoint_path", metadata != null ? metadata.getFullPath() : path);
-        payload.put("http_method", method);
-        payload.put("description", "Generated documentation for " + path);
-        payload.put("parameters", metadata != null ? metadata.getParameters() : null);
-        
-        Doc existing = docService.findByEndpoint(
-            metadata != null ? metadata.getFullPath() : path, 
-            method
-        );
-        
-        Doc doc;
-        String message;
-        if (existing != null) {
-            doc = docService.update(existing.getId(), payload);
-            message = "Updated documentation";
-        } else {
-            doc = docService.create(payload);
-            message = "Created documentation";
+        try {
+            // Find endpoint metadata
+            EndpointMetadata metadata = reflectionService.extractEndpointMetadata().stream()
+                .filter(e -> e.getPath().equals(path) && e.getMethod().equals(method))
+                .findFirst()
+                .orElse(null);
+            
+            if (metadata == null) {
+                // Create minimal metadata if endpoint not found
+                metadata = new EndpointMetadata();
+                metadata.setPath(path);
+                metadata.setFullPath(path);
+                metadata.setMethod(method);
+            }
+            
+            // Call LLM service to generate documentation
+            log.info("Generating documentation for {} {}", method, path);
+            GeneratedDocumentation result = llmService.generateDocumentation(metadata);
+            
+            // Map result to Doc entity payload
+            Map<String, Object> payload = new HashMap<>();
+            payload.put("endpoint_path", metadata.getFullPath());
+            payload.put("http_method", method);
+            payload.put("description", result.getDescription());
+            payload.put("parameters", result.getParameters());
+            payload.put("response_schema", null);
+            payload.put("code_examples", result.getExamples());
+            payload.put("llm_model", result.getModel());
+            payload.put("token_count", result.getTokenCount());
+            
+            // Save or update documentation
+            Doc existing = docService.findByEndpoint(metadata.getFullPath(), method);
+            
+            Doc doc;
+            String message;
+            if (existing != null) {
+                doc = docService.update(existing.getId(), payload);
+                message = "Updated documentation";
+            } else {
+                doc = docService.create(payload);
+                message = "Created documentation";
+            }
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("message", message);
+            response.put("doc", doc);
+            return ResponseEntity.ok(response);
+            
+        } catch (LLMException e) {
+            log.error("LLM error generating documentation: {}", e.getMessage());
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("message", "Failed to generate documentation: " + e.getMessage());
+            errorResponse.put("error", "LLM_ERROR");
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
+        } catch (Exception e) {
+            log.error("Unexpected error generating documentation", e);
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("message", "Unexpected error: " + e.getMessage());
+            errorResponse.put("error", "INTERNAL_ERROR");
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
         }
-        
-        Map<String, Object> response = new HashMap<>();
-        response.put("message", message);
-        response.put("doc", doc);
-        return ResponseEntity.ok(response);
     }
     
     @GetMapping("/all")

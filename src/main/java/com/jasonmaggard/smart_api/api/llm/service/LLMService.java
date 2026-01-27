@@ -1,0 +1,145 @@
+package com.jasonmaggard.smart_api.api.llm.service;
+
+import com.anthropic.client.AnthropicClient;
+import com.anthropic.client.okhttp.AnthropicOkHttpClient;
+import com.anthropic.models.messages.Message;
+import com.anthropic.models.messages.MessageCreateParams;
+import com.anthropic.models.messages.Model;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.jasonmaggard.smart_api.api.docs.dto.EndpointMetadata;
+import com.jasonmaggard.smart_api.api.llm.config.LLMConfig;
+import com.jasonmaggard.smart_api.api.llm.dto.GeneratedDocumentation;
+import com.jasonmaggard.smart_api.api.llm.exception.LLMException;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+
+import java.util.HashMap;
+import java.util.Map;
+
+@Service
+@RequiredArgsConstructor
+@Slf4j
+public class LLMService {
+    
+    private final LLMConfig llmConfig;
+    private final ObjectMapper objectMapper = new ObjectMapper();
+    
+    public GeneratedDocumentation generateDocumentation(EndpointMetadata endpoint) {
+        log.info("Generating documentation for {} {}", endpoint.getMethod(), endpoint.getFullPath());
+        
+        try {
+            AnthropicClient client = AnthropicOkHttpClient.builder()
+                .apiKey(llmConfig.getApiKey())
+                .build();
+            
+            String prompt = buildPrompt(endpoint);
+            
+            MessageCreateParams params = MessageCreateParams.builder()
+                .model(Model.of(llmConfig.getModel()))
+                .maxTokens((long) llmConfig.getMaxTokens())
+                .temperature(llmConfig.getTemperature())
+                .addUserMessage(prompt)
+                .build();
+            
+            Message response = client.messages().create(params);
+            
+            // Extract text content from response
+            String responseText = extractTextContent(response);
+            log.debug("LLM Response: {}", responseText);
+            
+            // Parse the JSON response
+            GeneratedDocumentation result = parseResponse(responseText);
+            result.setModel(llmConfig.getModel());
+            result.setTokenCount((int) response.usage().outputTokens());
+            
+            log.info("Successfully generated documentation for {} {}", endpoint.getMethod(), endpoint.getFullPath());
+            return result;
+            
+        } catch (Exception e) {
+            log.error("Failed to generate documentation for {} {}: {}", 
+                endpoint.getMethod(), endpoint.getFullPath(), e.getMessage(), e);
+            throw new LLMException("Failed to generate documentation: " + e.getMessage(), e);
+        }
+    }
+    
+    private String extractTextContent(Message response) {
+        return response.content().stream()
+            .filter(block -> block.text().isPresent())
+            .findFirst()
+            .flatMap(block -> block.text())
+            .map(textBlock -> textBlock.text())
+            .orElseThrow(() -> new LLMException("No text content in LLM response"));
+    }
+    
+    String buildPrompt(EndpointMetadata endpoint) {
+        StringBuilder prompt = new StringBuilder();
+        
+        prompt.append("You are an API documentation generator. ");
+        prompt.append("Generate comprehensive documentation for the following REST API endpoint.\n\n");
+        
+        prompt.append("Endpoint Details:\n");
+        prompt.append("- HTTP Method: ").append(endpoint.getMethod()).append("\n");
+        prompt.append("- Path: ").append(endpoint.getFullPath()).append("\n");
+        
+        if (endpoint.getParameters() != null && !endpoint.getParameters().isEmpty()) {
+            prompt.append("- Parameters: ").append(endpoint.getParameters()).append("\n");
+        }
+        
+        if (endpoint.getReturnType() != null) {
+            prompt.append("- Return Type: ").append(endpoint.getReturnType()).append("\n");
+        }
+        
+        prompt.append("\nProvide the documentation in the following JSON format:\n");
+        prompt.append("{\n");
+        prompt.append("  \"description\": \"A clear, concise description of what this endpoint does\",\n");
+        prompt.append("  \"parameters\": {\n");
+        prompt.append("    \"paramName\": { \"type\": \"string\", \"description\": \"param description\", \"required\": true }\n");
+        prompt.append("  },\n");
+        prompt.append("  \"examples\": {\n");
+        prompt.append("    \"curl\": \"curl example\",\n");
+        prompt.append("    \"java\": \"Java example\",\n");
+        prompt.append("    \"javascript\": \"JavaScript example\"\n");
+        prompt.append("  }\n");
+        prompt.append("}\n");
+        prompt.append("\nProvide ONLY the JSON object, without any markdown formatting or code blocks.");
+        
+        return prompt.toString();
+    }
+    
+    GeneratedDocumentation parseResponse(String responseText) {
+        try {
+            // Clean up potential markdown code blocks
+            String cleanedText = responseText.trim();
+            if (cleanedText.startsWith("```json")) {
+                cleanedText = cleanedText.substring(7);
+            } else if (cleanedText.startsWith("```")) {
+                cleanedText = cleanedText.substring(3);
+            }
+            if (cleanedText.endsWith("```")) {
+                cleanedText = cleanedText.substring(0, cleanedText.length() - 3);
+            }
+            cleanedText = cleanedText.trim();
+            
+            // Parse JSON
+            @SuppressWarnings("unchecked")
+            Map<String, Object> jsonMap = objectMapper.readValue(cleanedText, Map.class);
+            
+            GeneratedDocumentation doc = new GeneratedDocumentation();
+            doc.setDescription((String) jsonMap.get("description"));
+            
+            @SuppressWarnings("unchecked")
+            Map<String, Object> parameters = (Map<String, Object>) jsonMap.get("parameters");
+            doc.setParameters(parameters != null ? parameters : new HashMap<>());
+            
+            @SuppressWarnings("unchecked")
+            Map<String, Object> examples = (Map<String, Object>) jsonMap.get("examples");
+            doc.setExamples(examples != null ? examples : new HashMap<>());
+            
+            return doc;
+        } catch (Exception e) {
+            log.error("Failed to parse LLM response: {}", responseText, e);
+            throw new LLMException("Failed to parse LLM response: " + e.getMessage(), e);
+        }
+    }
+}
